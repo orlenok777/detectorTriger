@@ -4,100 +4,151 @@
     <meta charset="UTF-8" />
     <title>Motion and Sound Trigger (Demo)</title>
     <style>
-      body {
-        font-family: sans-serif;
-        margin: 20px;
+      * {
+        box-sizing: border-box;
       }
-      #video,
-      #canvas {
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: #f5f7fa;
+        margin: 0;
+        padding: 20px;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+      }
+      .container {
+        background: #fff;
+        padding: 20px 30px;
+        border-radius: 8px;
+        box-shadow: 0 2px 12px rgba(0, 0, 0, 0.1);
+        max-width: 500px;
+        width: 100%;
+      }
+      h1 {
+        text-align: center;
+        color: #333;
+      }
+      p {
+        color: #555;
+        line-height: 1.5;
+      }
+      video,
+      canvas {
+        width: 100%;
+        max-width: 100%;
         border: 1px solid #ccc;
-        max-width: 400px;
+        border-radius: 4px;
       }
       #controls {
-        margin-top: 1rem;
+        margin-top: 15px;
+      }
+      label {
+        display: block;
+        margin-bottom: 10px;
+        font-weight: 500;
+      }
+      input[type="checkbox"] {
+        margin-right: 10px;
+        transform: scale(1.1);
       }
       .info {
         font-size: 0.9rem;
         color: #666;
       }
+      .buttons {
+        margin-top: 15px;
+        text-align: center;
+      }
+      button {
+        padding: 10px 20px;
+        font-size: 1rem;
+        border: none;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background-color 0.3s ease;
+      }
+      button#toggleSystem {
+        background-color: #007bff;
+        color: #fff;
+      }
+      button#toggleSystem:hover {
+        background-color: #0056b3;
+      }
     </style>
   </head>
   <body>
-    <h1>Motion and Sound Trigger (Demo)</h1>
-
-    <p>
-      <strong>Важно:</strong> для работы требуется разрешение на доступ к камере
-      и микрофону. На некоторых браузерах потребуется запуск по HTTPS или
-      <code>http://localhost</code>.
-    </p>
-
-    <!-- Видео-поток с веб-камеры -->
-    <video id="video" autoplay playsinline></video>
-    <!-- Canvas для анализа движения -->
-    <canvas id="canvas" width="400" height="300" style="display: none"></canvas>
-
-    <div id="controls">
-      <label>
-        <input type="checkbox" id="motionDetection" checked />
-        Включить детектирование движения
-      </label>
-      <br />
-      <label>
-        <input type="checkbox" id="soundDetection" checked />
-        Включить детектирование громких звуков
-      </label>
-      <br />
-      <label>
-        <input type="checkbox" id="speechRecognition" checked />
-        Включить распознавание речи
-      </label>
+    <div class="container">
+      <h1>Демо детектирования</h1>
+      <p>
+        <strong>Важно:</strong> для работы требуется разрешение на доступ к камере
+        и микрофону. На некоторых браузерах потребуется запуск по HTTPS или
+        <code>http://localhost</code>.
+      </p>
+      <!-- Видео-поток с веб-камеры -->
+      <video id="video" autoplay playsinline></video>
+      <!-- Canvas для анализа движения (скрытый) -->
+      <canvas id="canvas" width="400" height="300" style="display: none;"></canvas>
+      <div id="controls">
+        <label>
+          <input type="checkbox" id="motionDetection" checked />
+          Включить детектирование движения
+        </label>
+        <label>
+          <input type="checkbox" id="soundDetection" checked />
+          Включить детектирование громких звуков
+        </label>
+        <label>
+          <input type="checkbox" id="speechRecognition" checked />
+          Включить распознавание речи
+        </label>
+      </div>
+      <p class="info">
+        При обнаружении движения, громкого шума или «волшебных фраз» (например,
+        «напомни мне», «спасибо») программа голосом сообщит: «Здравствуйте, я
+        вас услышала и перевожу вас на сайт напоминаний», после чего откроется сайт
+        (не чаще одного раза в 5 минут).
+      </p>
+      <div class="buttons">
+        <button id="toggleSystem">Остановить программу</button>
+      </div>
     </div>
-
-    <p class="info">
-      При обнаружении движения, громкого шума или «волшебных фраз» (например,
-      «напомни мне», «спасибо») откроется вкладка с сайтом (не чаще одного раза
-      в 5 минут).
-    </p>
 
     <script>
       // ===== Настройки =====
       const TARGET_URL = "https://orlenok777.github.io/oitodo/"; // Ссылка, которую будем открывать
       const COOLDOWN = 5 * 60 * 1000; // 5 минут в мс
-
-      // Порог "громкости" (условный). В реальности нужно подбирать, вычитывать RMS и т.д.
-      const SOUND_THRESHOLD = 0.15;
-      // Порог "движения" (сумма разницы пикселей). Чем меньше, тем чувствительнее.
-      const MOTION_THRESHOLD = 10000;
-      // "Магические" фразы
-      const MAGIC_PHRASES = ["напомни мне", "спасибо"];
+      const SOUND_THRESHOLD = 0.15; // Порог громкости
+      const MOTION_THRESHOLD = 10000; // Порог движения
+      const MAGIC_PHRASES = ["напомни мне", "спасибо"]; // "Магические" фразы
 
       // ===== Глобальные переменные =====
-      let lastTriggerTime = 0; // когда в последний раз открывали страницу
+      let lastTriggerTime = 0;
       let videoEl, canvasEl, ctx;
       let width, height;
+      let prevFrame = null;
+      let audioContext, analyser, dataArray, microphone;
+      let recognition;
+      let systemActive = true; // Активность системы
 
-      // ===== Инициализация видео (камера) =====
+      // ===== Инициализация камеры =====
       async function initCamera() {
         videoEl = document.getElementById("video");
         canvasEl = document.getElementById("canvas");
         ctx = canvasEl.getContext("2d");
-
         try {
           const stream = await navigator.mediaDevices.getUserMedia({
             video: true,
             audio: true,
           });
           videoEl.srcObject = stream;
-
-          // Подождём, пока видео реально загрузится
           videoEl.onloadedmetadata = () => {
-            width = videoEl.videoWidth;
-            height = videoEl.videoHeight;
+            width = videoEl.videoWidth || videoEl.clientWidth;
+            height = videoEl.videoHeight || videoEl.clientHeight;
             canvasEl.width = width;
             canvasEl.height = height;
           };
-
-          initSound(stream); // Параллельно инициализируем звук
+          initSound(stream);
         } catch (e) {
           console.error("Ошибка доступа к камере/микрофону:", e);
           alert("Ошибка: нет доступа к камере/микрофону.");
@@ -105,100 +156,84 @@
       }
 
       // ===== Детектирование движения =====
-      let prevFrame = null;
       function detectMotion() {
+        if (!systemActive) {
+          requestAnimationFrame(detectMotion);
+          return;
+        }
         const motionOn = document.getElementById("motionDetection").checked;
         if (!motionOn || !width || !height) {
           requestAnimationFrame(detectMotion);
           return;
         }
-
-        // Рисуем текущий кадр на canvas
         ctx.drawImage(videoEl, 0, 0, width, height);
-        // Получаем пиксели
         const currentFrame = ctx.getImageData(0, 0, width, height);
-
         if (prevFrame) {
-          // Считаем суммарное различие
           let diff = 0;
           for (let i = 0; i < currentFrame.data.length; i += 4) {
-            // i, i+1, i+2 - каналы R,G,B
             const rDiff = currentFrame.data[i] - prevFrame.data[i];
             const gDiff = currentFrame.data[i + 1] - prevFrame.data[i + 1];
             const bDiff = currentFrame.data[i + 2] - prevFrame.data[i + 2];
-            const pixelDiff =
-              Math.abs(rDiff) + Math.abs(gDiff) + Math.abs(bDiff);
-            diff += pixelDiff;
+            diff += Math.abs(rDiff) + Math.abs(gDiff) + Math.abs(bDiff);
           }
-          // Если diff > MOTION_THRESHOLD, считаем, что есть движение
           if (diff > MOTION_THRESHOLD) {
             triggerEvent("motion");
           }
         }
-
         prevFrame = currentFrame;
-
         requestAnimationFrame(detectMotion);
       }
 
       // ===== Детектирование громкого звука =====
-      let audioContext, analyser, dataArray, microphone;
       function initSound(stream) {
         const soundOn = document.getElementById("soundDetection").checked;
         if (!soundOn) return;
-
         audioContext = new AudioContext();
         microphone = audioContext.createMediaStreamSource(stream);
         analyser = audioContext.createAnalyser();
         analyser.fftSize = 2048;
         dataArray = new Uint8Array(analyser.fftSize);
         microphone.connect(analyser);
-
         checkSoundLevel();
       }
 
       function checkSoundLevel() {
+        if (!systemActive) {
+          requestAnimationFrame(checkSoundLevel);
+          return;
+        }
         const soundOn = document.getElementById("soundDetection").checked;
         if (!soundOn) {
           requestAnimationFrame(checkSoundLevel);
           return;
         }
-
         analyser.getByteTimeDomainData(dataArray);
-        // Рассчитаем «громкость» (примерно) как отклонение от 128
         let sum = 0;
         for (let i = 0; i < dataArray.length; i++) {
-          let val = (dataArray[i] - 128) / 128; // -1..+1
+          let val = (dataArray[i] - 128) / 128;
           sum += val * val;
         }
-        const rms = Math.sqrt(sum / dataArray.length); // корень квадратный от среднего квадрата
-
+        const rms = Math.sqrt(sum / dataArray.length);
         if (rms > SOUND_THRESHOLD) {
           triggerEvent("sound");
         }
-
         requestAnimationFrame(checkSoundLevel);
       }
 
-      // ===== Распознавание речи (Web Speech API) =====
-      let recognition;
+      // ===== Распознавание речи =====
       function initSpeechRecognition() {
         const speechOn = document.getElementById("speechRecognition").checked;
         if (!speechOn) return;
-
-        // Проверяем, поддерживается ли Web Speech API
         const SpeechRecognition =
           window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!SpeechRecognition) {
           console.warn("Ваш браузер не поддерживает SpeechRecognition.");
           return;
         }
-
         recognition = new SpeechRecognition();
         recognition.lang = "ru-RU";
         recognition.continuous = true;
         recognition.interimResults = false;
-
         recognition.onresult = (event) => {
           const results = event.results;
           const phrase = results[results.length - 1][0].transcript
@@ -212,13 +247,11 @@
             }
           }
         };
-
         recognition.onerror = (e) => {
           console.warn("SpeechRecognition error:", e.error);
         };
         recognition.onend = () => {
-          // Автоматический перезапуск, если не выключено
-          if (document.getElementById("speechRecognition").checked) {
+          if (document.getElementById("speechRecognition").checked && systemActive) {
             recognition.start();
           }
         };
@@ -227,54 +260,89 @@
 
       // ===== Универсальный триггер события =====
       function triggerEvent(type) {
+        if (!systemActive) return;
         const now = Date.now();
-        if (now - lastTriggerTime < COOLDOWN) {
-          // Прошло недостаточно времени
-          return;
-        }
+        if (now - lastTriggerTime < COOLDOWN) return;
         lastTriggerTime = now;
-
         console.log("Событие сработало:", type);
-        // Открываем вкладку (либо новую, либо фокусируемся — но реально фокусировать уже открытую невозможно напрямую)
-        window.open(TARGET_URL, "_blank");
+        // Голосовой вывод
+        speakMessage("Здравствуйте, я вас услышала и перевожу вас на сайт напоминаний");
+        // Открываем сайт через 1,5 секунду (чтобы голос успел произнести сообщение)
+        setTimeout(() => {
+          window.open(TARGET_URL, "_blank");
+        }, 1500);
       }
 
-      // ===== Инициализация всего при загрузке =====
+      // ===== Функция воспроизведения голосового сообщения =====
+      function speakMessage(message) {
+        if ("speechSynthesis" in window) {
+          const utterance = new SpeechSynthesisUtterance(message);
+          utterance.lang = "ru-RU";
+          window.speechSynthesis.speak(utterance);
+        } else {
+          console.warn("Speech Synthesis не поддерживается в вашем браузере.");
+        }
+      }
+
+      // ===== Обработчик кнопки включения/остановки системы =====
+      document.getElementById("toggleSystem").addEventListener("click", () => {
+        systemActive = !systemActive;
+        const btn = document.getElementById("toggleSystem");
+        if (systemActive) {
+          btn.textContent = "Остановить программу";
+          // Если система вновь активирована, перезапускаем распознавание речи, если нужно
+          if (document.getElementById("speechRecognition").checked) {
+            initSpeechRecognition();
+          }
+          // В случае аудиоконтекста возобновляем, если он ранее был приостановлен
+          if (audioContext && audioContext.state === "suspended") {
+            audioContext.resume();
+          }
+        } else {
+          btn.textContent = "Запустить программу";
+          // Останавливаем распознавание речи, если оно запущено
+          if (recognition) {
+            recognition.stop();
+          }
+          // Можно приостановить аудиоконтекст
+          if (audioContext && audioContext.state === "running") {
+            audioContext.suspend();
+          }
+        }
+      });
+
+      // ===== Инициализация при загрузке =====
       window.addEventListener("DOMContentLoaded", () => {
         initCamera();
         requestAnimationFrame(detectMotion);
         initSpeechRecognition();
 
-        // Отслеживаем изменения чекбоксов, чтобы включать/выключать функции
-        document
-          .getElementById("motionDetection")
-          .addEventListener("change", () => {
-            if (!document.getElementById("motionDetection").checked) {
-              prevFrame = null; // сбросим предыдущий кадр
+        // Отслеживание изменения настроек
+        document.getElementById("motionDetection").addEventListener("change", () => {
+          if (!document.getElementById("motionDetection").checked) {
+            prevFrame = null;
+          }
+        });
+
+        document.getElementById("soundDetection").addEventListener("change", () => {
+          if (!document.getElementById("soundDetection").checked) {
+            // При отключении звука ничего не делаем
+          } else {
+            if (audioContext && audioContext.state === "suspended") {
+              audioContext.resume();
             }
-          });
-        document
-          .getElementById("soundDetection")
-          .addEventListener("change", () => {
-            if (!document.getElementById("soundDetection").checked) {
-              // при отключении звука ничего особо не делаем, просто при checkSoundLevel() будет пропуск
-            } else {
-              if (audioContext && audioContext.state === "suspended") {
-                audioContext.resume();
-              }
+          }
+        });
+
+        document.getElementById("speechRecognition").addEventListener("change", () => {
+          if (document.getElementById("speechRecognition").checked) {
+            initSpeechRecognition();
+          } else {
+            if (recognition) {
+              recognition.stop();
             }
-          });
-        document
-          .getElementById("speechRecognition")
-          .addEventListener("change", () => {
-            if (document.getElementById("speechRecognition").checked) {
-              initSpeechRecognition();
-            } else {
-              if (recognition) {
-                recognition.stop();
-              }
-            }
-          });
+          }
+        });
       });
     </script>
   </body>
