@@ -3,7 +3,12 @@
   <head>
     <meta charset="UTF-8" />
     <title>Motion and Sound Trigger (Demo)</title>
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="icons/icon-192.png" />
+    <meta name="theme-color" content="#007bff" />
     <style>
+      /* Ваши стили остаются без изменений */
       * {
         box-sizing: border-box;
       }
@@ -130,6 +135,7 @@
       let audioContext, analyser, dataArray, microphone;
       let recognition;
       let systemActive = true; // Активность системы
+      let wakeLock = null; // Для блокировки экрана
 
       // ===== Инициализация камеры =====
       async function initCamera() {
@@ -298,6 +304,8 @@
           if (audioContext && audioContext.state === "suspended") {
             audioContext.resume();
           }
+          // Запрос блокировки экрана при активации системы
+          requestWakeLock();
         } else {
           btn.textContent = "Запустить программу";
           // Останавливаем распознавание речи, если оно запущено
@@ -308,12 +316,32 @@
           if (audioContext && audioContext.state === "running") {
             audioContext.suspend();
           }
+          // Освобождаем блокировку экрана при остановке системы
+          if (wakeLock !== null) {
+            wakeLock.release().then(() => {
+              wakeLock = null;
+            });
+          }
         }
       });
+
+      // ===== Функция для блокировки экрана =====
+      async function requestWakeLock() {
+        try {
+          wakeLock = await navigator.wakeLock.request('screen');
+          console.log('Wake Lock активирован');
+          wakeLock.addEventListener('release', () => {
+            console.log('Wake Lock освобождён');
+          });
+        } catch (err) {
+          console.error(`${err.name}, ${err.message}`);
+        }
+      }
 
       // ===== Инициализация при загрузке =====
       window.addEventListener("DOMContentLoaded", () => {
         initCamera();
+        requestWakeLock(); // Запрос блокировки экрана
         requestAnimationFrame(detectMotion);
         initSpeechRecognition();
 
@@ -344,6 +372,19 @@
           }
         });
       });
+
+      // ===== Регистрация Service Worker для PWA =====
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/service-worker.js')
+            .then(registration => {
+              console.log('Service Worker зарегистрирован:', registration.scope);
+            })
+            .catch(error => {
+              console.error('Ошибка регистрации Service Worker:', error);
+            });
+        });
+      }
     </script>
   </body>
 </html>
