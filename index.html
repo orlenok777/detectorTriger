@@ -3,6 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <title>Motion and Sound Trigger (Demo)</title>
+    <!-- Подключение манифеста для PWA -->
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
     <link rel="apple-touch-icon" href="icons/icon-192.png" />
@@ -80,7 +81,21 @@
       button#toggleSystem:hover {
         background-color: #0056b3;
       }
+      /* Стили для QR-кода */
+      #qrCodeContainer {
+        margin-top: 20px;
+        text-align: center;
+      }
+      #qrCodeContainer p {
+        margin-bottom: 10px;
+        font-weight: 500;
+      }
+      #qrCode {
+        display: inline-block;
+      }
     </style>
+    <!-- Подключение библиотеки QRCode.js через CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
   </head>
   <body>
     <div class="container">
@@ -116,6 +131,12 @@
       </p>
       <div class="buttons">
         <button id="toggleSystem">Остановить программу</button>
+      </div>
+      
+      <!-- Контейнер для QR-кода -->
+      <div id="qrCodeContainer">
+        <p>Сканируйте QR-код, чтобы открыть сайт на вашем устройстве:</p>
+        <div id="qrCode"></div>
       </div>
     </div>
 
@@ -345,6 +366,9 @@
         requestAnimationFrame(detectMotion);
         initSpeechRecognition();
 
+        // Генерация QR-кода
+        generateQRCode();
+
         // Отслеживание изменения настроек
         document.getElementById("motionDetection").addEventListener("change", () => {
           if (!document.getElementById("motionDetection").checked) {
@@ -383,6 +407,22 @@
             .catch(error => {
               console.error('Ошибка регистрации Service Worker:', error);
             });
+        });
+      }
+
+      // ===== Функция для генерации QR-кода =====
+      function generateQRCode() {
+        const qrCodeContainer = document.getElementById("qrCode");
+        // Очищаем контейнер перед генерацией (на случай повторного вызова)
+        qrCodeContainer.innerHTML = "";
+        // Генерация QR-кода с использованием QRCode.js
+        new QRCode(qrCodeContainer, {
+          text: TARGET_URL,
+          width: 128,
+          height: 128,
+          colorDark : "#000000",
+          colorLight : "#ffffff",
+          correctLevel : QRCode.CorrectLevel.H
         });
       }
     </script>
