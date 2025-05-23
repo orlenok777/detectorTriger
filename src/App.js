@@ -15,21 +15,56 @@ function MotionAndSoundTrigger() {
   const [micError, setMicError] = useState("");
 
   // Параметры чувствительности
-  const [sensitivity, setSensitivity] = useState({
-    motion: 50, // порог для движения
-    sound: 30, // порог для звука
+  const [sensitivity, setSensitivity] = useState(() => {
+    const saved = JSON.parse(localStorage.getItem("triggerSensitivity") || "{}");
+    return {
+      motion: saved.motion ?? 50,
+      sound: saved.sound ?? 30,
+    };
   });
 
   // Флаги для включения обнаружения
   const [tracking, setTracking] = useState({ motion: true, sound: true });
 
+  const [settings, setSettings] = useState(() => {
+    const saved = JSON.parse(localStorage.getItem("triggerSettings") || "{}");
+    return {
+      targetURL: saved.targetURL || "https://orlenok777.github.io/oitodo",
+      openInNewTab: saved.openInNewTab !== false,
+      captureScreenshot: saved.captureScreenshot || false,
+      voiceURI: saved.voiceURI || "",
+    };
+  });
+
+  const [voices, setVoices] = useState([]);
+  const [lastScreenshot, setLastScreenshot] = useState(null);
+
   const [lastTriggerTime, setLastTriggerTime] = useState(0);
+
+  // Загрузка доступных голосов
+  useEffect(() => {
+    function loadVoices() {
+      const v = window.speechSynthesis ? window.speechSynthesis.getVoices() : [];
+      setVoices(v);
+    }
+    loadVoices();
+    if (window.speechSynthesis) {
+      window.speechSynthesis.onvoiceschanged = loadVoices;
+    }
+  }, []);
+
+  // Сохраняем настройки
+  useEffect(() => {
+    localStorage.setItem("triggerSettings", JSON.stringify(settings));
+  }, [settings]);
+
+  useEffect(() => {
+    localStorage.setItem("triggerSensitivity", JSON.stringify(sensitivity));
+  }, [sensitivity]);
 
   // Время паузы для повторного открытия сайта (5 минут)
   const triggerCooldown = 5 * 60 * 1000; // 5 минут в мс
 
-  // Сайт, который открывается при срабатывании
-  const targetURL = "https://orlenok777.github.io/oitodo";
 
   // Волшебные фразы
   const magicPhrases = ["напомни мне", "спасибо"];
@@ -46,11 +81,30 @@ function MotionAndSoundTrigger() {
     if ("speechSynthesis" in window) {
       const utterance = new SpeechSynthesisUtterance(message);
       utterance.lang = "ru-RU";
+      const voice = voices.find((v) => v.voiceURI === settings.voiceURI);
+      if (voice) {
+        utterance.voice = voice;
+      }
       window.speechSynthesis.speak(utterance);
     }
+
     // Открываем сайт через 1 секунду, чтобы дать время произнести сообщение
     setTimeout(() => {
-      window.open(targetURL, "_blank");
+      if (settings.captureScreenshot) {
+        const video = videoRef.current;
+        const canvas = canvasRef.current;
+        if (video && canvas) {
+          const ctx = canvas.getContext("2d");
+          canvas.width = video.videoWidth;
+          canvas.height = video.videoHeight;
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+          setLastScreenshot(canvas.toDataURL("image/png"));
+        }
+      }
+      window.open(
+        settings.targetURL,
+        settings.openInNewTab ? "_blank" : "_self"
+      );
     }, 1000);
   };
 
@@ -406,7 +460,71 @@ function MotionAndSoundTrigger() {
             />
           </label>
         </div>
+        <div style={{ marginTop: "10px" }}>
+          <label>
+            Целевая ссылка:
+            <br />
+            <input
+              type="text"
+              value={settings.targetURL}
+              onChange={(e) =>
+                setSettings({ ...settings, targetURL: e.target.value })
+              }
+            />
+          </label>
+        </div>
+        <div style={{ marginTop: "10px" }}>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.openInNewTab}
+              onChange={(e) =>
+                setSettings({ ...settings, openInNewTab: e.target.checked })
+              }
+            />
+            Открывать в новой вкладке
+          </label>
+        </div>
+        <div style={{ marginTop: "10px" }}>
+          <label>
+            <input
+              type="checkbox"
+              checked={settings.captureScreenshot}
+              onChange={(e) =>
+                setSettings({ ...settings, captureScreenshot: e.target.checked })
+              }
+            />
+            Сохранять скриншот при срабатывании
+          </label>
+        </div>
+        {voices.length > 0 && (
+          <div style={{ marginTop: "10px" }}>
+            <label>
+              Голос оповещения:
+              <br />
+              <select
+                value={settings.voiceURI}
+                onChange={(e) =>
+                  setSettings({ ...settings, voiceURI: e.target.value })
+                }
+              >
+                <option value="">По умолчанию</option>
+                {voices.map((v) => (
+                  <option key={v.voiceURI} value={v.voiceURI}>
+                    {v.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        )}
       </div>
+      {lastScreenshot && (
+        <div style={{ marginTop: "20px" }}>
+          <h3>Последний скриншот:</h3>
+          <img src={lastScreenshot} alt="screenshot" style={{ maxWidth: "100%" }} />
+        </div>
+      )}
     </div>
   );
 }
