@@ -6,6 +6,7 @@ function MotionAndSoundTrigger() {
 
   const audioContextRef = useRef(null);
   const analyserRef = useRef(null);
+  const micStreamRef = useRef(null);
 
   // Состояния обнаружения движения и звука
   const [isMotionDetected, setIsMotionDetected] = useState(false);
@@ -172,7 +173,7 @@ function MotionAndSoundTrigger() {
     return () => {
       if (animationFrameId) cancelAnimationFrame(animationFrameId);
     };
-  }, [tracking.motion, sensitivity.motion, isMotionDetected, lastTriggerTime]);
+  }, [tracking.motion, sensitivity.motion]);
 
   // ==========================
   //   ОБНАРУЖЕНИЕ ЗВУКА
@@ -188,6 +189,7 @@ function MotionAndSoundTrigger() {
         const stream = await navigator.mediaDevices.getUserMedia({
           audio: true,
         });
+        micStreamRef.current = stream;
         const audioContext = new (window.AudioContext ||
           window.webkitAudioContext)();
         const analyser = audioContext.createAnalyser();
@@ -232,11 +234,15 @@ function MotionAndSoundTrigger() {
 
     return () => {
       clearInterval(intervalId);
+      if (micStreamRef.current) {
+        micStreamRef.current.getTracks().forEach((t) => t.stop());
+        micStreamRef.current = null;
+      }
       if (audioContextRef.current) {
         audioContextRef.current.close();
       }
     };
-  }, [tracking.sound, sensitivity.sound, isSoundDetected, lastTriggerTime]);
+  }, [tracking.sound, sensitivity.sound]);
 
   // ==========================
   //   РАСПОЗНАВАНИЕ РЕЧИ
@@ -280,7 +286,7 @@ function MotionAndSoundTrigger() {
     return () => {
       recognition.stop();
     };
-  }, [lastTriggerTime]);
+  }, []);
 
   // ==========================
   //   ОТЛИЧИТЕЛЬНАЯ ЛОГИКА
