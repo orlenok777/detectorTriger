@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>РобоВода — iPhone-компаньон</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="#">
+<style>
+body{
+  margin:0;
+  font-family:Arial, sans-serif;
+  color:#fff;
+  text-align:center;
+  background:linear-gradient(135deg,#00bcd4,#8e44ad);
+  height:100vh;
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  align-items:center;
+}
+.robot{
+  background:#fff;
+  border-radius:20px;
+  width:200px;
+  height:150px;
+  position:relative;
+  margin-bottom:20px;
+}
+.eye{
+  background:#000;
+  width:30px;
+  height:30px;
+  border-radius:50%;
+  position:absolute;
+  top:40px;
+  animation:blink 3s infinite;
+}
+.eye.left{left:50px;}
+.eye.right{right:50px;}
+@keyframes blink{
+  0%,90%{height:30px;}
+  95%,100%{height:0;}
+}
+.mouth{
+  position:absolute;
+  bottom:30px;
+  left:50%;
+  transform:translateX(-50%);
+  width:80px;
+  height:20px;
+  border-radius:0 0 40px 40px;
+  background:#ff4081;
+}
+#timer{
+  font-size:2em;
+  margin:20px 0;
+}
+button{
+  padding:10px 20px;
+  font-size:1em;
+  margin:5px;
+  border:none;
+  border-radius:5px;
+  cursor:pointer;
+}
+#start{background:#4caf50;color:#fff;}
+#stop{background:#f44336;color:#fff;}
+</style>
+</head>
+<body>
+<div class="robot">
+  <div class="eye left"></div>
+  <div class="eye right"></div>
+  <div class="mouth"></div>
+</div>
+<div id="timer">00:00:00</div>
+<button id="start">Старт</button>
+<button id="stop" disabled>Стоп</button>
+<script>
+let running=false;
+let nextTime=0;
+let countdown;
+let mainInterval;
+let speakInterval;
+const twoHours=2*60*60*1000;
+function speak(text){
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang='ru-RU';
+  speechSynthesis.speak(u);
+}
+function speakReminder(){
+  speak('Рома, пора пить воду!');
+  let count=0;
+  clearInterval(speakInterval);
+  speakInterval=setInterval(()=>{
+    if(!running||count>=5){clearInterval(speakInterval);return;}
+    speak('Пей воду! Пей воду!');
+    count++;
+  },4000);
+}
+function updateTimer(){
+  if(!running)return;
+  const diff=nextTime-Date.now();
+  if(diff<=0){document.getElementById('timer').textContent='00:00:00';}
+  else{
+    const h=String(Math.floor(diff/3600000)).padStart(2,'0');
+    const m=String(Math.floor((diff%3600000)/60000)).padStart(2,'0');
+    const s=String(Math.floor((diff%60000)/1000)).padStart(2,'0');
+    document.getElementById('timer').textContent=`${h}:${m}:${s}`;
+  }
+}
+function schedule(){
+  speakReminder();
+  nextTime=Date.now()+twoHours;
+  updateTimer();
+  clearInterval(mainInterval);
+  mainInterval=setInterval(()=>{
+    speakReminder();
+    nextTime=Date.now()+twoHours;
+  },twoHours);
+}
+function start(){
+  if(running)return;
+  running=true;
+  document.getElementById('start').disabled=true;
+  document.getElementById('stop').disabled=false;
+  schedule();
+  countdown=setInterval(updateTimer,1000);
+}
+function stop(){
+  running=false;
+  clearInterval(mainInterval);
+  clearInterval(countdown);
+  clearInterval(speakInterval);
+  speechSynthesis.cancel();
+  document.getElementById('timer').textContent='00:00:00';
+  document.getElementById('start').disabled=false;
+  document.getElementById('stop').disabled=true;
+}
+function registerSW(){
+  if('serviceWorker' in navigator){
+    const sw=`self.addEventListener('install',e=>{e.waitUntil(caches.open('rv').then(c=>c.addAll(['./'])));self.skipWaiting();});self.addEventListener('fetch',e=>{e.respondWith(caches.match(e.request).then(r=>r||fetch(e.request)));});`;
+    const blob=new Blob([sw],{type:'text/javascript'});
+    navigator.serviceWorker.register(URL.createObjectURL(blob));
+  }
+}
+function createManifest(){
+  const manifest={name:'РобоВода',short_name:'РобоВода',start_url:'./',display:'standalone',background_color:'#00bcd4',theme_color:'#00bcd4'};
+  const link=document.querySelector('link[rel="manifest"]');
+  link.href=URL.createObjectURL(new Blob([JSON.stringify(manifest)],{type:'application/json'}));
+}
+document.getElementById('start').addEventListener('click',start);
+document.getElementById('stop').addEventListener('click',stop);
+window.addEventListener('load',()=>{registerSW();createManifest();});
+</script>
+</body>
+</html>
